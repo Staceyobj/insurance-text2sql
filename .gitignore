@@ -1,0 +1,12 @@
+# Plan notes live in their own local-only repo (never pushed)
+.plans/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Environment (SPEC §8: .env never enters version control)
+.env
