@@ -1,0 +1,85 @@
+# CI (SPEC §6.4): test on every push/PR (no secrets), eval on PRs to main
+# and manual dispatch (uses ZHIPUAI_API_KEY, pinned to glm-4.7, serial).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: insurance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d insurance"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql://t2s_readonly:t2s_readonly@localhost:5432/insurance
+      ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/insurance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run python db/seed.py
+      - run: uv run pytest
+
+  eval:
+    # Service containers do NOT carry across jobs: eval brings its own
+    # postgres and its own seed (load_golden executes every expected_sql).
+    needs: test
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.fork == false &&
+       github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: insurance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d insurance"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      ZHIPUAI_API_KEY: ${{ secrets.ZHIPUAI_API_KEY }}
+      LLM_MODEL: glm-4.7 # pinned for CI (SPEC §5.3); never the free tier
+      DATABASE_URL: postgresql://t2s_readonly:t2s_readonly@localhost:5432/insurance
+      ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/insurance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - run: uv run python db/seed.py
+      - run: uv run python evals/runner.py --jobs 1
+      - uses: actions/upload-artifact@v4
+        if: always() # upload the report even when the gates fail
+        with:
+          name: eval-report
+          path: evals/report.md

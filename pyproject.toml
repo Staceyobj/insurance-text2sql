@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Natural language to PostgreSQL question-answering over insurance data (text-to-SQL)"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.141.1",
     "langchain-openai>=1.6.0",
     "langgraph>=1.2.11",
     "psycopg[binary]>=3.2",
@@ -11,10 +12,12 @@ dependencies = [
     "python-dotenv>=1.0",
     "pyyaml>=6.0.3",
     "sqlglot>=30.17.0",
+    "uvicorn>=0.52.4",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=8.0",
     "ruff>=0.6",
 ]
