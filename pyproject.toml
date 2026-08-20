@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Natural language to PostgreSQL question-answering over insurance data (text-to-SQL)"
 requires-python = ">=3.12"
 dependencies = [
+    "langchain-openai>=1.6.0",
+    "langgraph>=1.2.11",
     "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.15.0",
     "python-dotenv>=1.0",
     "sqlglot>=30.17.0",
 ]
@@ -14,6 +17,9 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+
+[project.scripts]
+t2s = "text2sql.cli:main"
 
 [build-system]
 requires = ["hatchling"]
