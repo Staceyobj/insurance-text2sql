@@ -5,8 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from langchain_openai import ChatOpenAI
+from openai import APIConnectionError, APITimeoutError, RateLimitError
 
 from text2sql.config import Settings
+
+# Transport-level API failures (langchain's wrapped variants subclass these).
+# They are consumed by the openai client's own exponential-backoff retry
+# (max_retries below); if one still surfaces, nodes re-raise it instead of
+# converting it into error_feedback — SPEC §3's retry budget is for
+# validation/execution/parse failures only, and a rate limit is none of them.
+TRANSPORT_ERRORS = (APIConnectionError, APITimeoutError, RateLimitError)
 
 # prompts/ lives at the repo root (SPEC §9); resolved relative to this package.
 # This intentionally binds the app to a repo checkout ("clone and run"), not
@@ -31,6 +39,7 @@ def build_llm(settings: Settings) -> ChatOpenAI:
         model=settings.llm_model,
         temperature=0,
         extra_body={"thinking": {"type": thinking}},
+        max_retries=5,  # transport-level 429/backoff handled here, not in node semantics
     )
 
 

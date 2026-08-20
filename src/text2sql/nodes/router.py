@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from text2sql.llm import load_prompt
+from text2sql.llm import TRANSPORT_ERRORS, load_prompt
 from text2sql.state import QueryState, RouteResult, digest, trace_entry
 
 
@@ -26,6 +26,8 @@ def make_router_node(llm) -> Callable[[QueryState], dict]:
             route = structured.invoke(messages).get("parsed")
             if route is None or route.action not in ("sql", "clarify", "refuse"):
                 raise ValueError(f"unroutable output: {route!r}")
+        except TRANSPORT_ERRORS:
+            raise  # infrastructure error: never burns the semantic retry budget
         except Exception as err:  # structured-output failure == validation failure
             update = {
                 "action": None,

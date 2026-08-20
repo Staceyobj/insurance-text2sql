@@ -12,6 +12,8 @@ import os
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from text2sql.config import Settings
 from text2sql.graph import build_graph
 from text2sql.state import new_state
@@ -35,7 +37,10 @@ class FakeLLM:
 
     def invoke(self, messages):
         self.calls.append(list(messages))
-        return SimpleNamespace(content=self.script.pop(0))
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return SimpleNamespace(content=item)
 
     def with_structured_output(self, schema, method=None, **kwargs):
         outer = self
@@ -44,6 +49,8 @@ class FakeLLM:
             def invoke(self, messages):
                 outer.calls.append(list(messages))
                 raw = outer.script.pop(0)
+                if isinstance(raw, Exception):  # simulate an API/transport error
+                    raise raw
                 content = None if raw is None else raw
                 parsed = None
                 if raw is not None:
@@ -231,3 +238,18 @@ def test_generator_plain_text_fallback():
     assert state["retries"] == 0  # salvaged: no budget consumed
     assert state["rows"] == [{"count": 40}]
     assert state["answer"] == "共 40 名代理人。"
+
+
+def test_transport_error_not_treated_as_parse_failure():
+    # SPEC §3's retry budget is for semantic failures only; a transport-level
+    # API error must escape the node untouched instead of becoming feedback
+    # (misclassification burned the budget during a rate-limited eval run).
+    from openai import APIConnectionError
+
+    from text2sql.nodes.generator import make_generator_node
+
+    node = make_generator_node(
+        FakeLLM([APIConnectionError(message="connection boom", request=None)]), ""
+    )
+    with pytest.raises(APIConnectionError):
+        node(new_state("任意问题"))

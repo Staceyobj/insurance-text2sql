@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from text2sql.llm import load_prompt
+from text2sql.llm import TRANSPORT_ERRORS, load_prompt
 from text2sql.state import QueryState, SqlResult, digest, trace_entry
 
 _FENCE_RE = re.compile(r"```(?:sql)?\s*(.+?)\s*```", re.DOTALL | re.IGNORECASE)
@@ -56,6 +56,8 @@ def make_generator_node(llm, schema_context: str) -> Callable[[QueryState], dict
                 sql = _extract_sql(outcome.get("raw").content if outcome.get("raw") else None)
                 if sql is None:
                     raise ValueError("model returned no structured output")
+        except TRANSPORT_ERRORS:
+            raise  # infrastructure error: never burns the semantic retry budget
         except Exception as err:  # structured-output failure == validation failure
             update = {
                 "error_feedback": f"generator parse failure: {err}",
