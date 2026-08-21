@@ -183,7 +183,8 @@ Constraints: **absolute dates only** (no relative time such as "the last three m
 ### 6.4 CI (GitHub Actions, `.github/workflows/ci.yml`)
 
 - **test job** (every push / PR): postgres:16 service container → `uv sync` → `ruff check` → seed → `pytest`. Requires no API key.
-- **eval job** (PRs to main + manual trigger): depends on the test job; uses the secret `ZHIPUAI_API_KEY`; model pinned to `glm-4.7` (not the free tier); runs `make eval`, uploads the report as an artifact; the exit code is the gate. Fork PRs cannot read secrets, so the eval job skips automatically and a maintainer triggers it manually as a follow-up.
+- **eval job** (pushes to main + manual trigger): depends on the test job; uses the secret `ZHIPUAI_API_KEY`; model pinned to `glm-4.7` (not the free tier); runs `make eval`, uploads the report as an artifact; the exit code is the gate. PRs (including fork PRs) run the test job only; the eval gate therefore sits after merge — an eval failure lands on main and requires manual follow-up (accepted trade-off: long-lived branches must not burn real-model quota on every push).
+- **deploy job** (pushes to main only): needs the test job (not eval); builds and pushes the image to ACR and updates the Azure Container App per `DEPLOYMENT.md` §6; authenticates via OIDC, no stored client secret.
 - A full evaluation run is ~42 × 2–3 LLM calls, on the order of 1 RMB.
 
 ## 7. External Interfaces
@@ -235,12 +236,16 @@ insurance-text2sql/
 ├── SPEC.md
 ├── CLAUDE.md
 ├── README.md
+├── DEPLOYMENT.md             # Azure deployment spec (subordinate to this file)
 ├── pyproject.toml            # Python 3.12 + uv
 ├── uv.lock
-├── Makefile                  # up / down / seed / psql / test / eval / run / lint
+├── Makefile                  # up / down / seed / psql / test / eval / run / lint (+ deploy targets, DEPLOYMENT.md §7)
 ├── docker-compose.yml        # postgres:16
+├── Dockerfile                # app image; uv sync --frozen (DEPLOYMENT.md §3)
+├── .dockerignore
 ├── .env.example
 ├── .github/workflows/ci.yml
+├── infra/                    # Bicep for the Azure deployment (DEPLOYMENT.md)
 ├── db/
 │   ├── 01_schema.sql         # six tables + bilingual (CN/EN) COMMENTs
 │   ├── 02_roles.sql          # t2s_readonly
@@ -268,6 +273,8 @@ insurance-text2sql/
     ├── test_executor.py
     └── test_graph.py         # injects FakeLLM; runs offline
 ```
+
+Deployment to Azure (`Dockerfile`, `infra/`) is specified in `DEPLOYMENT.md`, which is subordinate to this document.
 
 ## 10. Test Strategy
 
