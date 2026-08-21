@@ -1,8 +1,14 @@
 # insurance-text2sql
 
-Natural-language → PostgreSQL question answering over insurance data (text-to-SQL). Given one business question in Chinese (or English), the system generates read-only SQL, executes it, and answers in Chinese.
+![CI](https://github.com/Staceyobj/insurance-text2sql/actions/workflows/ci.yml/badge.svg)
+
+Natural-language → PostgreSQL question answering over insurance data (text2SQL). Given one business question in Chinese (or English), the system generates read-only SQL, executes it, and answers in Chinese. Built on the **LangChain** stack: `langchain-openai` for the model layer (structured output against the Zhipu GLM endpoint) with **LangGraph** for agent orchestration.
+
+**Stack** — Python 3.12 (uv) · LangChain / LangGraph (Zhipu GLM via OpenAI-compatible endpoint) · sqlglot (AST-level SQL validation) · FastAPI/uvicorn · psycopg · PostgreSQL 16 (Docker Compose) · pytest · ruff · GitHub Actions
 
 > Demo project: all data is deterministic synthetic insurance data (seed=42) with no real records. Every table and column carries a bilingual (CN/EN) COMMENT, and the schema block in the prompts is generated on the fly from those COMMENTs.
+
+> Design authority: [SPEC.md](SPEC.md) is the single source of truth — the `§` references throughout this README point there.
 
 ## Quick start
 
@@ -51,7 +57,7 @@ flowchart TD
   X -- retries≥2 --> H
 ```
 
-- **Five-node LangGraph pipeline** (`router → generator → validator → executor → answerer`). Validation failures, execution errors, and structured-output parse failures **share one retry budget** (hard cap 2); once exhausted the flow ends in an honest failure.
+- **Five-node agent pipeline built on the LangChain stack** (`router → generator → validator → executor → answerer`): `langchain-openai` provides the model layer — `ChatOpenAI` against the Zhipu endpoint, `with_structured_output(method="function_calling")` for the router/generator outputs — and LangGraph orchestrates the conditional routing and the **shared retry budget** (hard cap 2): validation failures, execution errors, and structured-output parse failures all consume the same counter; once exhausted the flow ends in an honest failure.
 - **Two independent read-only layers** (never weaken either):
   1. AST-level whitelist validation (sqlglot, rules R1–R8): single SELECT only, six-table whitelist, system objects banned, function blacklist, `SELECT INTO`/locking clauses banned, LIMIT governance (clamped to ROW_LIMIT+1; truncation reported honestly), and only the normalized re-rendered SQL is ever executed.
   2. The runtime connection holds only the read-only role `t2s_readonly` (per-table GRANT SELECT, `default_transaction_read_only=on`, `statement_timeout=5s`).
