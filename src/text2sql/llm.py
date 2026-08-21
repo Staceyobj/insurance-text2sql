@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from pathlib import Path
 
 from langchain_openai import ChatOpenAI
@@ -21,6 +22,24 @@ TRANSPORT_ERRORS = (APIConnectionError, APITimeoutError, RateLimitError)
 # to an installed wheel — the project is never published as one.
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 
+# The Zhipu endpoint is dual-stack (AAAA listed first). Azure Container Apps
+# VNet egress is IPv4-only, and a sequential connect burns the whole client
+# timeout on the unreachable v6 address before ever trying v4 (DEPLOYMENT.md
+# §1). Reordering getaddrinfo to put AF_INET first fixes it with identical
+# semantics on any network that has v6 egress.
+_orig_getaddrinfo = socket.getaddrinfo
+
+# getaddrinfo result entry: (family, type, proto, canonname, sockaddr)
+_GaiResult = tuple[int, int, int, str, tuple]
+
+
+def _ipv4_first(*args: object, **kwargs: object) -> list[_GaiResult]:
+    results: list[_GaiResult] = _orig_getaddrinfo(*args, **kwargs)
+    v4 = [r for r in results if r[0] == socket.AF_INET]
+    if v4:
+        return v4 + [r for r in results if r[0] != socket.AF_INET]
+    return results
+
 
 def build_llm(settings: Settings) -> ChatOpenAI:
     """ChatOpenAI against the Zhipu OpenAI-compatible endpoint.
@@ -32,6 +51,7 @@ def build_llm(settings: Settings) -> ChatOpenAI:
     """
     if not settings.zhipuai_api_key:
         raise RuntimeError("ZHIPUAI_API_KEY is not set; put it in .env (see .env.example)")
+    socket.getaddrinfo = _ipv4_first  # idempotent; see the note above
     thinking = "enabled" if settings.llm_thinking_enabled else "disabled"
     return ChatOpenAI(
         base_url=settings.llm_base_url,

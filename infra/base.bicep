@@ -38,9 +38,12 @@ var envName = '${baseName}-env'
 var vnetName = '${baseName}-vnet'
 var dnsZoneName = '${pgServerName}.private.postgres.database.azure.com'
 
-// Both connection strings force TLS (DEPLOYMENT.md §2 note).
-var databaseUrl = 'postgresql://t2s_readonly:t2s_readonly@${pgServerName}.private.postgres.database.azure.com/insurance?sslmode=require'
-var adminDatabaseUrl = 'postgresql://${baseName}admin:${pgAdminPassword}@${pgServerName}.private.postgres.database.azure.com/insurance?sslmode=require'
+// Connection host is the server's FQDN property (<server>.postgres.database.azure.com):
+// with a custom private DNS zone the service registers a hash-named A record
+// inside the zone and the plain FQDN CNAMEs to it — "<server>.private...."
+// does NOT resolve. Both strings force TLS (DEPLOYMENT.md §2 note).
+var databaseUrl = 'postgresql://t2s_readonly:t2s_readonly@${pg.properties.fullyQualifiedDomainName}/insurance?sslmode=require'
+var adminDatabaseUrl = 'postgresql://${baseName}admin:${pgAdminPassword}@${pg.properties.fullyQualifiedDomainName}/insurance?sslmode=require'
 
 // ---------------------------------------------------------------------------
 // Network: one VNet, one subnet delegated to Container Apps, one to Postgres.
@@ -242,8 +245,20 @@ resource kvAdminDatabaseUrl 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
 
 // ---------------------------------------------------------------------------
 // Container Apps environment: workload profiles, Consumption only — never a
-// dedicated profile (~$145/mo baseline).
+// dedicated profile (~$145/mo baseline). Console logs ship to Log Analytics —
+// without this, Job/app tracebacks are unrecoverable (learned in M3).
 // ---------------------------------------------------------------------------
+
+resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: '${baseName}-logs'
+  location: rgLocation
+  sku: {
+    name: 'PerGB2018'
+  }
+  properties: {
+    retentionInDays: 30
+  }
+}
 
 resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: envName
@@ -254,6 +269,13 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
       infrastructureSubnetId: appsSubnet.id
     }
     zoneRedundant: false
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logs.properties.customerId
+        sharedKey: listKeys(logs.id, logs.apiVersion).primarySharedKey
+      }
+    }
     workloadProfiles: [
       {
         name: 'Consumption'
@@ -264,7 +286,8 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
 }
 
 output acrLoginServer string = acr.properties.loginServer
-output postgresHost string = '${pgServerName}.private.postgres.database.azure.com'
+output logsCustomerId string = logs.properties.customerId
+output postgresHost string = pg.properties.fullyQualifiedDomainName
 output keyVaultName string = kvName
 output identityId string = identity.id
 output environmentId string = env.id

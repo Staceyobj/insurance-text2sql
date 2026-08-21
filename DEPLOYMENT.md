@@ -27,6 +27,7 @@ GitHub Actions: build --> ACR --> az containerapp update (OIDC, deploy job)
 | Secrets | Key Vault + managed identity | App reads `ZHIPUAI_API_KEY` / `DATABASE_URL` via Key Vault references; `ADMIN_DATABASE_URL` exists only as an ephemeral secret on the seed Job. |
 | Registry / CI | ACR; GitHub Actions deploy job with OIDC | Deploy depends on the test job only (§6). |
 | Scaling | min replicas **0**, max **2–3** | The max cap exists because of Zhipu rate limits (429s observed under concurrency). Cold start is accepted: first query = cold start + lazy graph build + first LLM call, ~5–10 s. |
+| Egress | IPv4 only | VNet-integrated Container Apps have no IPv6 egress; the Zhipu endpoint lists AAAA first, so `build_llm` reorders `getaddrinfo` to try AF_INET first (SPEC §5.3). Verified in M3: without it the first `/v1/query` hangs past the client timeout. |
 
 ## 2. Security mapping (the two layers, SPEC §5.4 + §4.3)
 
@@ -64,7 +65,9 @@ Operational notes:
 ## 5. Seed Job
 
 - Runs `db/seed.py` against Flexible Server: **destructive by design** (`DROP SCHEMA ... CASCADE` rebuild, SPEC §4.2). Bicep pins the Job trigger type to **Manual** so nothing can auto-rerun it.
-- Success check: the six row counts equal the table in SPEC §4.2.
+- Success check: the six row counts equal the table in SPEC §4.2 (seed.py exits non-zero on mismatch, so Job `Succeeded` == counts verified). M3 proved the whole `02_roles.sql` chain (CREATE ROLE / GRANT / ALTER ROLE … SET) works under the non-superuser server admin — the PG16 caveat closed with no seed changes.
+
+**Smoke procedure (M3 runbook)**: the ingress is internal-only, so smoke runs inside the app container — `az containerapp update --min-replicas 1` (the trailing `infra-up` update resets it to 0), wait for a Ready replica, then `az containerapp exec … --command "python3 db/smoke_queries.py"` (five checks: write rejection, 5 s statement timeout, sql / clarify / refuse paths), then `--min-replicas 0`. Note: `--command` is argv-form — no pipes, no quotes; and the exec websocket can drop mid-run on a cold graph: rerun on the warm replica.
 
 ## 6. CI (extends SPEC §6.4)
 
