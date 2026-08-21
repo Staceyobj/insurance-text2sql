@@ -72,7 +72,7 @@ Operational notes:
 ## 6. CI (extends SPEC §6.4)
 
 - eval trigger changes from "PRs to main + manual" to **pushes to main + manual** (SPEC §6.4 revised in the same PR that changes `ci.yml`). Rationale: long-lived branches must not burn real-model quota on every push. Accepted trade-off: the eval gate moves to after merge — an eval failure lands on main and requires manual follow-up.
-- deploy job (new, pushes to main only): `needs: test` (**not** eval — an eval failure must not block deploying a test-verified image); OIDC federated credentials, no client secret; build/push to ACR → `az containerapp update` → `/healthz` smoke from inside the VNet.
+- deploy job (new, pushes to main + manual dispatch for pre-merge validation): `needs: test` (**not** eval — an eval failure must not block deploying a test-verified image); OIDC federated credentials, no client secret; build/push to ACR → `az containerapp update` → readiness-probe verification (`/healthz` answered inside the VNet) → back to `min-replicas 0`.
 
 ## 7. Milestones (independent of SPEC §11's product milestones)
 

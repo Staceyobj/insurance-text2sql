@@ -1,5 +1,7 @@
-# CI (SPEC §6.4): test on every push/PR (no secrets), eval on PRs to main
-# and manual dispatch (uses ZHIPUAI_API_KEY, pinned to glm-4.7, serial).
+# CI (SPEC §6.4): test on every push/PR (no secrets); eval after merge
+# (pushes to main + manual dispatch — long-lived branches must not burn
+# real-model quota on every push); deploy on pushes to main + manual dispatch
+# (OIDC, needs test but NOT eval).
 name: ci
 
 on:
@@ -44,12 +46,12 @@ jobs:
   eval:
     # Service containers do NOT carry across jobs: eval brings its own
     # postgres and its own seed (load_golden executes every expected_sql).
+    # Gate timing note (SPEC §6.4): eval runs AFTER merge — a failure lands
+    # on main and needs manual follow-up (deliberate quota trade-off).
     needs: test
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.fork == false &&
-       github.base_ref == 'main')
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -83,3 +85,48 @@ jobs:
         with:
           name: eval-report
           path: evals/report.md
+
+  deploy:
+    # Azure deploy (DEPLOYMENT.md §6): build/push the amd64 image, update the
+    # app, verify via the readiness probe (GET /healthz from inside the VNet —
+    # the ingress is internal-only). needs test, NOT eval: an eval failure
+    # must not block deploying a test-verified image. OIDC only, no client
+    # secret; the federated credential is branch-pinned.
+    needs: test
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC federation
+      contents: read
+    env:
+      RG: rg-t2s-eastasia
+      APP: t2s-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build and push image
+        run: |
+          acr=$(az acr list -g "$RG" --query '[0].loginServer' -o tsv)
+          az acr login --name "${acr%%.*}"
+          docker build --platform linux/amd64 -t "$acr/insurance-text2sql:dev" .
+          docker push "$acr/insurance-text2sql:dev"
+          echo "ACR=$acr" >> "$GITHUB_ENV"
+      - name: Update app and verify readiness (/healthz in-VNet, via probe)
+        run: |
+          az containerapp update -n "$APP" -g "$RG" --image "$ACR/insurance-text2sql:dev" -o none
+          az containerapp update -n "$APP" -g "$RG" --min-replicas 1 -o none
+          n=0
+          until az containerapp replica list -n "$APP" -g "$RG" \
+              --query '[].properties.containers[0].ready' -o tsv 2>/dev/null | grep -q true; do
+            n=$((n+1)); [ $n -gt 40 ] && { echo 'readiness probe never passed'; exit 1; }; sleep 10
+          done
+          echo 'replica Ready: /healthz answered 200 inside the VNet'
+      - name: Scale back to idle
+        if: always()
+        run: az containerapp update -n "$APP" -g "$RG" --min-replicas 0 -o none
