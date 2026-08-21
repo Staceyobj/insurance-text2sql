@@ -1,4 +1,4 @@
-.PHONY: up down seed psql test eval run lint
+.PHONY: up down seed psql test eval run lint docker-build docker-smoke
 
 # Start PostgreSQL 16; --wait blocks until the healthcheck passes.
 up:
@@ -30,3 +30,27 @@ run:
 
 lint:
 	uv run ruff check .
+
+# Build the app image (DEPLOYMENT.md §3).
+docker-build:
+	docker build -t insurance-text2sql:dev .
+
+# Container smoke against the local compose PG: /healthz plus one real
+# /v1/query (needs ZHIPUAI_API_KEY in .env). Inside the container the
+# database is reached via host.docker.internal, not localhost — that name is
+# Docker Desktop (macOS/Windows); on Linux add
+# --add-host=host.docker.internal:host-gateway to the docker run line.
+docker-smoke: docker-build
+	envfile=$$(mktemp); \
+	grep -v '^ADMIN_DATABASE_URL=' .env > $$envfile; \
+	trap 'rm -f $$envfile; docker stop t2s-smoke >/dev/null 2>&1' EXIT; \
+	docker run --rm -d --name t2s-smoke -p 8000:8000 \
+		--env-file $$envfile \
+		-e DATABASE_URL=postgresql://t2s_readonly:t2s_readonly@host.docker.internal:5432/insurance \
+		insurance-text2sql:dev; \
+	n=0; until curl -sf localhost:8000/healthz >/dev/null; do \
+		n=$$((n+1)); [ $$n -gt 60 ] && { echo 'healthz timed out'; exit 1; }; sleep 0.5; done; \
+	curl -sf localhost:8000/healthz && echo && \
+	curl -sf -X POST localhost:8000/v1/query \
+		-H 'content-type: application/json' \
+		-d '{"question": "2024年各产品类别分别有多少张保单？"}' | head -c 600 && echo

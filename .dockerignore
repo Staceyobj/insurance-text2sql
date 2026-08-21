@@ -1,0 +1,21 @@
+# Keep the image to what DEPLOYMENT.md §3 allows: src/, prompts/, db/,
+# pyproject/uv.lock. Everything else is build- or repo-scaffolding.
+.git
+.github
+.plans
+.env
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.DS_Store
+tests/
+evals/
+docker-compose.yml
+Makefile
+SPEC.md
+CLAUDE.md
+README.md
+DEPLOYMENT.md
+Dockerfile
+.dockerignore
