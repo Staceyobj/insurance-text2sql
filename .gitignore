@@ -1,6 +1,9 @@
 # Plan notes live in their own local-only repo (never pushed)
 .plans/
 
+# macOS
+**/.DS_Store
+
 # Python
 .venv/
 __pycache__/
