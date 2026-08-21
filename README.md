@@ -10,6 +10,10 @@ Natural-language → PostgreSQL question answering over insurance data (text2SQL
 
 > Design authority: [SPEC.md](SPEC.md) is the single source of truth — the `§` references throughout this README point there.
 
+> Optional extra: a complete **Azure deployment variant** (container image,
+> Bicep IaC, private PostgreSQL, CI deploy) lives on the `feat/azure-deploy`
+> branch — see [Optional: Azure deployment](#optional-azure-deployment-variant-branch) below.
+
 ## Quick start
 
 Prerequisites: Docker, [uv](https://docs.astral.sh/uv/), and make (macOS/Linux). Evaluation and the service need a Zhipu API key.
@@ -120,3 +124,13 @@ Measured on a same-machine clone into `/tmp` (M5 walkthrough, including an API s
 | `uv run t2s` (one question) | ~15 s |
 | API smoke (`uvicorn` + two curls) | ~13 s |
 | **Full chain** | **~14.6 min measured; ≈8 min when API latency is low** |
+
+## Optional: Azure deployment (variant branch)
+
+Cloud deployment is deliberately **optional and branch-scoped**: `main` stays
+the pure product. The complete variant — container image, two-phase Bicep
+IaC, internal-only Container Apps with a private PostgreSQL 16, a Manual
+seed Job, an OIDC deploy job, and the accompanying spec amendments — lives
+on the `feat/azure-deploy` branch (start from
+[`DEPLOYMENT.md`](https://github.com/Staceyobj/insurance-text2sql/blob/feat/azure-deploy/DEPLOYMENT.md));
+`make infra-up` there takes ~30 minutes on a first run (reruns are faster).
