@@ -185,7 +185,7 @@ Constraints: **absolute dates only** (no relative time such as "the last three m
 
 - **test job** (every push / PR): postgres:16 service container → `uv sync` → `ruff check` → seed → `pytest`. Requires no API key.
 - **eval job** (pushes to main + manual trigger): depends on the test job; uses the secret `ZHIPUAI_API_KEY`; model pinned to `glm-4.7` (not the free tier); runs `make eval`, uploads the report as an artifact; the exit code is the gate. PRs (including fork PRs) run the test job only; the eval gate therefore sits after merge — an eval failure lands on main and requires manual follow-up (accepted trade-off: long-lived branches must not burn real-model quota on every push).
-- **deploy job** (pushes to main only): needs the test job (not eval); builds and pushes the image to ACR and updates the Azure Container App per `DEPLOYMENT.md` §6; authenticates via OIDC, no stored client secret.
+- **deploy job** (pushes to main + manual dispatch): needs the test job (not eval); builds and pushes the image to ACR and updates the Azure Container App per `DEPLOYMENT.md` §6; authenticates via OIDC, no stored client secret.
 - A full evaluation run is ~42 × 2–3 LLM calls, on the order of 1 RMB.
 
 ## 7. External Interfaces
