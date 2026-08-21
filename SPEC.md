@@ -134,6 +134,7 @@ After each node runs, it appends `{node, duration_ms, input_digest, output_diges
 - `temperature=0`; **do not pass a seed parameter** — do not assume verbatim stability of model output; determinism is guaranteed instead by the result-set comparison evaluation in §6.
 - Structured output uses `method="function_calling"`; JSON parse failures are **treated as validation failures**, written into `error_feedback` and routed through the unified retry path (sharing the `retries` cap).
 - Thinking mode is off by default (`LLM_THINKING_ENABLED=false`, passing `thinking.type` via `extra_body`); decide whether to enable it after measuring real latency.
+- `build_llm` reorders `getaddrinfo` to prefer IPv4: the Zhipu endpoint is dual-stack (AAAA first) while the Azure runtime has IPv6-less egress, and a sequential connect would burn the whole timeout on the dead v6 address (DEPLOYMENT.md §1). Semantics are unchanged on networks with v6 egress.
 
 ### 5.4 SQL Validation Security Rules
 
@@ -249,7 +250,8 @@ insurance-text2sql/
 ├── db/
 │   ├── 01_schema.sql         # six tables + bilingual (CN/EN) COMMENTs
 │   ├── 02_roles.sql          # t2s_readonly
-│   └── seed.py               # seed=42
+│   ├── seed.py               # seed=42
+│   └── smoke_queries.py      # in-VNet smoke checks (DEPLOYMENT.md §5)
 ├── prompts/                  # all prompts externalized; zero inline prompts in code
 │   ├── router.md
 │   ├── generator.md
