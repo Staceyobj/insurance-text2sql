@@ -40,6 +40,8 @@ GitHub Actions: build --> ACR --> az containerapp update (OIDC, deploy job)
 - Root `Dockerfile`: `python:3.12-slim` multi-stage + uv; install with **`uv sync --frozen --no-dev`** (editable layout — `llm.py` resolves `prompts/` relative to the source tree via `parents[2]`). **`uv pip install .` (site-packages) is forbidden** — it breaks prompt loading.
 - The image contains `src/`, `prompts/`, and `db/` (inert in the app; the seed Job reuses the same image with its command overridden to `python db/seed.py`, so there is exactly one image to build and audit).
 - Entrypoint: `uvicorn text2sql.api:app`; liveness probe `GET /healthz` (static, no key required).
+- The image must already exist in ACR before the app/Job resources are deployed — revision provisioning validates the image pull at PUT time. `infra/` is therefore two phases: `base.bicep` (everything else) → push image → `workloads.bicep` (app + seed Job).
+- The ACR image is always built `--platform linux/amd64` (Container Apps' Consumption profile is amd64-only; dev machines may be arm64).
 
 ## 4. Environment variables (SPEC §8 → Azure)
 
@@ -50,7 +52,14 @@ GitHub Actions: build --> ACR --> az containerapp update (OIDC, deploy job)
 | `ADMIN_DATABASE_URL` | **seed Job only** — ephemeral secret, never on the app |
 | `LLM_*`, `ROW_LIMIT`, `MAX_RETRIES`, `LOG_LEVEL` | plain Container App env vars |
 
-Key Vault secrets are seeded once out-of-band via `az keyvault secret set` before first deployment (documented runbook step; no Makefile target — one-time operator action).
+All three Key Vault secrets (`zhipuai-api-key`, `database-url`, `admin-database-url`) are provisioned by `infra/base.bicep` itself from the two secure deploy parameters (`pgAdminPassword`, `zhipuaiApiKey`) — there is no manual `az keyvault secret set` runbook step. `make infra-up` reads `ZHIPUAI_API_KEY` from `.env` and generates the PG admin password randomly at deploy time (never printed, never stored in a file; recoverable from the Key Vault secret `admin-database-url` if ever needed). For the strictest posture, delete `admin-database-url` from Key Vault after the first successful seed (M3 runbook) — the seed Job is its only consumer.
+
+Operational notes:
+
+- Re-running `make infra-up` rotates the PG admin password (fresh random per run; the server password and the `admin-database-url` secret update together). Self-consistent — nothing caches the old value.
+- `admin-database-url` is an ARM resource: a manual deletion is undone by the next `infra-up` (with the rotated password). Treat "delete after first seed" as a break-glass posture, not a persistent state.
+- First activation can race RBAC propagation (the identity's Key Vault/ACR roles may not be effective when the very first revision activates). The two-phase `infra-up` (base → build+push → workloads) usually gives propagation enough time; the trailing `az containerapp update` re-pull line (below) doubles as the recovery move if a revision still fails with a Key Vault reference error.
+- `:dev` is a moving tag: re-running `infra-up` over an existing deployment re-PUTs identical workloads (no-op) and would keep the old digest. The trailing `az containerapp update --image` forces a fresh revision that re-pulls the tag.
 
 ## 5. Seed Job
 
@@ -72,7 +81,7 @@ Key Vault secrets are seeded once out-of-band via `az keyvault secret set` befor
 | **M3 Seed + verify** | Run seed Job; verify the PG16 caveat; smoke `/v1/query` | Row counts match SPEC §4.2; writes rejected as `t2s_readonly`; 5 s timeout active; sql / clarify / honest-failure smoke pass |
 | **M4 CI deploy** | eval trigger change + deploy job (OIDC) | Push to main deploys automatically; PR flow is test-only |
 
-Makefile targets (names fixed here, implemented in M1/M2): `docker-build`, `docker-smoke`, `infra-up`, `infra-seed`.
+Makefile targets (names fixed here, implemented in M1/M2): `docker-build`, `docker-smoke`, `infra-up`, `infra-seed`, `infra-stop` / `infra-start` (PG stop/start — a stopped server charges storage+backup only; full teardown is `az group delete -g rg-t2s-eastasia`, redeploy via `make infra-up`).
 
 ## 8. Cost ballpark (East Asia)
 
