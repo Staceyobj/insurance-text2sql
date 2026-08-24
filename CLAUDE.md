@@ -24,6 +24,10 @@ and an honest-failure fallback (SPEC §3).
 | `make eval` | Golden-set evaluation against the real LLM (needs `ZHIPUAI_API_KEY`) |
 | `make run` | CLI REPL |
 | `make lint` | `ruff check` |
+| `make api` | uvicorn dev server (`--reload`, :8000; `/healthz` needs no key) |
+| `make frontend-dev` | Vite dev server (:5173); proxies `/v1` + `/healthz` to :8000 |
+| `make frontend-test` | Frontend oxlint + vitest — offline, no DB, no browser |
+| `make frontend-build` | Production build → `frontend/dist/` (uvicorn serves it if present) |
 
 Use `uv` for all Python operations (`uv sync`, `uv run ...`) — never install
 packages with pip directly. Python 3.12.
