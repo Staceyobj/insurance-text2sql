@@ -95,3 +95,39 @@ def test_honest_failure_stays_200_with_error():
     assert body["rows"] is None
     assert body["error"] is not None and "R2" in body["error"]
     assert "未能完成" in body["answer"]
+
+
+# --- static serving (SPEC-FRONTEND §3/§8): zero Node involvement in pytest ---
+
+
+def test_no_static_dir_root_is_404(tmp_path):
+    """Explicit absent dist → no mount, `/` stays 404.
+
+    The absent path is passed explicitly so the test is deterministic even on
+    a machine where `make frontend-build` has populated the real frontend/dist.
+    """
+    app = create_app(
+        llm=FakeLLM([]),
+        settings=Settings(database_url=CONNINFO),
+        static_dir=tmp_path / "absent",
+    )
+    assert TestClient(app).get("/").status_code == 404
+
+
+def test_stub_dist_serves_index_and_api_routes_win(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<!doctype html><html>stub frontend</html>")
+    app = create_app(
+        llm=FakeLLM([json.dumps({"action": "clarify", "clarify_question": "哪一年？"})]),
+        settings=Settings(database_url=CONNINFO),
+        static_dir=dist,
+    )
+    client = TestClient(app)
+    root = client.get("/")
+    assert root.status_code == 200
+    assert "stub frontend" in root.text
+    # Routes registered before the mount keep winning (SPEC-FRONTEND §3).
+    assert client.get("/healthz").json() == {"status": "ok"}
+    body = client.post("/v1/query", json={"question": "去年理赔了多少？"}).json()
+    assert body["action"] == "clarify"
