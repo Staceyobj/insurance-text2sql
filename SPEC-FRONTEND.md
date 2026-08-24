@@ -176,7 +176,7 @@ Two distinct error surfaces, never conflated:
 | Node | 22 LTS, pinned via `.nvmrc` + `engines` field | Reproducible builds |
 | HTTP client | `fetch` API | No axios-level dependency needed |
 | Styling | Plain CSS from the template | No Tailwind / UI kit — deliberately minimal |
-| Lint / test | ESLint (ships with the template) + vitest (**added explicitly** as a devDependency with a `test` script — the react-ts template includes no test runner) | Unit-test the pure mapping function; offline |
+| Lint / test | oxlint (the template's default — create-vite 9 ships oxlint in place of ESLint) + vitest (**added explicitly** as a devDependency with a `test` script — the template includes no test runner) | Unit-test the pure mapping function; offline |
 
 `node_modules/` and `frontend/dist/` are gitignored; `frontend/package-lock.json`
 is committed.
@@ -204,10 +204,13 @@ is governed by this document:
 ```
 frontend/
 ├── .nvmrc                  # 22
+├── .oxlintrc.json          # template-default linter (create-vite 9 ships oxlint, not ESLint)
 ├── index.html
-├── package.json
+├── package.json            # engines: node >=22.12
 ├── package-lock.json
-├── tsconfig.json
+├── tsconfig.json           # solution file referencing the two below (template split)
+├── tsconfig.app.json
+├── tsconfig.node.json      # type-checks vite.config.ts
 ├── vite.config.ts          # proxy /v1 + /healthz → 127.0.0.1:8000
 ├── src/
 │   ├── main.tsx
