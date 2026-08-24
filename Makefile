@@ -1,4 +1,4 @@
-.PHONY: up down seed psql test eval run lint api frontend-dev frontend-test
+.PHONY: up down seed psql test eval run lint api frontend-dev frontend-test frontend-build
 
 # Start PostgreSQL 16; --wait blocks until the healthcheck passes.
 up:
@@ -42,3 +42,7 @@ frontend-dev:
 # Lint + unit tests for the frontend (offline, no DB, no browser).
 frontend-test:
 	cd frontend && npm run lint && npm run test
+
+# Production build → frontend/dist (served by `uvicorn` once it exists).
+frontend-build:
+	cd frontend && npm run build

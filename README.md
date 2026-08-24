@@ -22,7 +22,7 @@ Prerequisites: Docker, [uv](https://docs.astral.sh/uv/), and make (macOS/Linux).
 cp .env.example .env      # then fill in ZHIPUAI_API_KEY (not needed for test)
 make up                   # start PostgreSQL 16 (waits for the healthcheck)
 make seed                 # schema + roles + deterministic data (seed=42, byte-identical reruns)
-make test                 # 92 offline tests — no network, no API key
+make test                 # 94 offline tests — no network, no API key
 make run                  # CLI REPL
 ```
 
@@ -47,6 +47,26 @@ curl -s -X POST localhost:8000/v1/query -H 'Content-Type: application/json' \
 ```
 
 Response fields: `action` (sql / clarify / refuse), `answer`, `sql` (the normalized SQL that actually ran), `rows`, `truncated`, `error` (honest failure after exhausted retries surfaces here; HTTP stays 200), `trace` (returned only when `debug=true`). Money values inside `rows` are lossless strings (e.g. `"1159128031.00"`).
+
+## Web UI
+
+A single-page React UI over the same `POST /v1/query` endpoint — display layer only, no new endpoints, no CORS anywhere (see [SPEC-FRONTEND.md](SPEC-FRONTEND.md)).
+
+Development — two processes (frontend toolchain needs Node ≥ 22.12; the Python side needs nothing new):
+
+```bash
+make api             # uvicorn :8000 with --reload
+make frontend-dev    # Vite dev server :5173, proxies /v1 + /healthz to :8000
+```
+
+Open http://localhost:5173. Production — one process:
+
+```bash
+make frontend-build                            # vite build → frontend/dist/
+uv run uvicorn text2sql.api:app --port 8000    # serves the UI and the API same-origin
+```
+
+The static mount exists only when `frontend/dist/index.html` is present at startup: without a build the backend behaves exactly as before, and `make test` never involves Node. `make frontend-test` runs the frontend linter and unit tests offline.
 
 ## Architecture
 

@@ -8,8 +8,10 @@ compiled graphs plus the openai client are safe for concurrent invokes.
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from text2sql.config import Settings, get_settings
@@ -34,8 +36,18 @@ class QueryResponse(BaseModel):
     trace: list[dict]  # populated only when debug=true
 
 
-def create_app(llm=None, settings: Settings | None = None) -> FastAPI:
-    """App factory; ``llm`` is injectable for tests (FakeLLM)."""
+# Repo-root-relative frontend build output (SPEC-FRONTEND §3).
+DEFAULT_STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+def create_app(
+    llm=None, settings: Settings | None = None, static_dir: Path | None = None
+) -> FastAPI:
+    """App factory; ``llm`` is injectable for tests (FakeLLM).
+
+    ``static_dir`` is injectable the same way (a stub dist in tmp_path);
+    production callers never pass it.
+    """
     app = FastAPI(title="insurance-text2sql", version="0.1.0")
     app_settings = settings or get_settings()
     lock = threading.Lock()
@@ -65,6 +77,14 @@ def create_app(llm=None, settings: Settings | None = None) -> FastAPI:
             "error": state.get("error_feedback"),
             "trace": state.get("trace", []) if request.debug else [],
         }
+
+    # Production static serving (SPEC-FRONTEND §3): mounted only when a build
+    # exists, so a build-less checkout behaves exactly as before. Resolved
+    # from the module path — uvicorn may be started from any directory.
+    directory = static_dir if static_dir is not None else DEFAULT_STATIC_DIR
+    if (directory / "index.html").is_file():
+        # Registered after all API routes, so /healthz and /v1/query always win.
+        app.mount("/", StaticFiles(directory=directory, html=True), name="frontend")
 
     return app
 
