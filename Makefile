@@ -1,4 +1,4 @@
-.PHONY: up down seed psql test eval run lint
+.PHONY: up down seed psql test eval run lint api frontend-dev
 
 # Start PostgreSQL 16; --wait blocks until the healthcheck passes.
 up:
@@ -30,3 +30,11 @@ run:
 
 lint:
 	uv run ruff check .
+
+# HTTP API dev server. /healthz needs nothing; /v1/query needs DB + API key.
+api:
+	uv run uvicorn text2sql.api:app --reload --port 8000
+
+# Vite dev server (:5173) — proxies /v1 + /healthz to :8000, so zero CORS.
+frontend-dev:
+	cd frontend && ([ -d node_modules ] || npm install) && npm run dev
