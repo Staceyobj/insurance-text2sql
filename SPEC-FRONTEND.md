@@ -212,6 +212,7 @@ frontend/
 ├── tsconfig.app.json
 ├── tsconfig.node.json      # type-checks vite.config.ts
 ├── vite.config.ts          # proxy /v1 + /healthz → 127.0.0.1:8000
+├── public/                 # favicon.svg (referenced by index.html)
 ├── src/
 │   ├── main.tsx
 │   ├── App.tsx             # form + result panel + trace panel
