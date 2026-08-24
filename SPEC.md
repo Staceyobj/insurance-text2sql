@@ -233,14 +233,16 @@ Constraints: **absolute dates only** (no relative time such as "the last three m
 ```
 insurance-text2sql/
 ├── SPEC.md
+├── SPEC-FRONTEND.md         # frontend addendum; authoritative for frontend/
 ├── CLAUDE.md
 ├── README.md
 ├── pyproject.toml            # Python 3.12 + uv
 ├── uv.lock
-├── Makefile                  # up / down / seed / psql / test / eval / run / lint
+├── Makefile                  # up / down / seed / psql / test / eval / run / lint / api / frontend-dev / frontend-build / frontend-test
 ├── docker-compose.yml        # postgres:16
 ├── .env.example
 ├── .github/workflows/ci.yml
+├── frontend/                 # Vite + React + TS SPA — see SPEC-FRONTEND.md
 ├── db/
 │   ├── 01_schema.sql         # six tables + bilingual (CN/EN) COMMENTs
 │   ├── 02_roles.sql          # t2s_readonly
