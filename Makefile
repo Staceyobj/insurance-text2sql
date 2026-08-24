@@ -1,4 +1,4 @@
-.PHONY: up down seed psql test eval run lint api frontend-dev
+.PHONY: up down seed psql test eval run lint api frontend-dev frontend-test
 
 # Start PostgreSQL 16; --wait blocks until the healthcheck passes.
 up:
@@ -38,3 +38,7 @@ api:
 # Vite dev server (:5173) — proxies /v1 + /healthz to :8000, so zero CORS.
 frontend-dev:
 	cd frontend && ([ -d node_modules ] || npm install) && npm run dev
+
+# Lint + unit tests for the frontend (offline, no DB, no browser).
+frontend-test:
+	cd frontend && npm run lint && npm run test
