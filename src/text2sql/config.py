@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://open.bigmodel.cn/api/paas/v4"  # /v4, not /v1
     llm_model: str = "glm-4.7"
     llm_thinking_enabled: bool = False
+    # Request timeout in seconds: turns a hung call into a retryable transport
+    # error instead of an infinite wait (see llm.py TRANSPORT_ERRORS).
+    llm_timeout_s: float = 300.0
 
     # --- Database (application holds the read-only role only) ---
     database_url: str = "postgresql://t2s_readonly:t2s_readonly@localhost:5432/insurance"
