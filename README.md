@@ -22,7 +22,7 @@ Prerequisites: Docker, [uv](https://docs.astral.sh/uv/), and make (macOS/Linux).
 cp .env.example .env      # then fill in ZHIPUAI_API_KEY (not needed for test)
 make up                   # start PostgreSQL 16 (waits for the healthcheck)
 make seed                 # schema + roles + deterministic data (seed=42, byte-identical reruns)
-make test                 # 94 offline tests — no network, no API key
+make test                 # 97 offline tests — no network, no API key
 make run                  # CLI REPL
 ```
 

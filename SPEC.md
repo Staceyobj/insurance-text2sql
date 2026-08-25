@@ -222,6 +222,7 @@ Constraints: **absolute dates only** (no relative time such as "the last three m
 | `LLM_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` | OpenAI-compatible endpoint |
 | `LLM_MODEL` | `glm-4.7` | Pinned for evaluation/CI; locally switchable to `glm-4.7-flash` |
 | `LLM_THINKING_ENABLED` | `false` | Thinking-mode switch (§5.3) |
+| `LLM_TIMEOUT_S` | `300` | ChatOpenAI request timeout in seconds; a hang becomes a retryable transport error (§5.3) |
 | `DATABASE_URL` | `postgresql://t2s_readonly:t2s_readonly@localhost:5432/insurance` | Application connection (read-only role) |
 | `ADMIN_DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/insurance` | Seeding flow only |
 | `ROW_LIMIT` | `200` | Result row cap (§5.4 R6) |

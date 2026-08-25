@@ -40,6 +40,9 @@ def build_llm(settings: Settings) -> ChatOpenAI:
         temperature=0,
         extra_body={"thinking": {"type": thinking}},
         max_retries=5,  # transport-level 429/backoff handled here, not in node semantics
+        # Bounds a hung request: the timeout raises APITimeoutError (already in
+        # TRANSPORT_ERRORS), so it retries here instead of pending forever.
+        timeout=settings.llm_timeout_s,
     )
 
 
